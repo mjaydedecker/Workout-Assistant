@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mjaydedecker.workoutassistant.WorkoutAssistantApp
+import com.mjaydedecker.workoutassistant.util.WeightFormatter
 import com.mjaydedecker.workoutassistant.util.toHhMmSs
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -40,9 +41,10 @@ fun SessionDetailScreen(
     onNavigateBack: () -> Unit
 ) {
     val viewModel: SessionDetailViewModel = viewModel(
-        factory = SessionDetailViewModelFactory(app.sessionRepository, sessionId)
+        factory = SessionDetailViewModelFactory(app.sessionRepository, app.settingsRepository, sessionId)
     )
     val uiState by viewModel.uiState.collectAsState()
+    val settings by viewModel.settings.collectAsState()
     val session = uiState.session
 
     val dateFmt = DateTimeFormatter.ofPattern("EEE, MMM d yyyy").withZone(ZoneId.systemDefault())
@@ -96,7 +98,7 @@ fun SessionDetailScreen(
                                 )
                                 exercise.weightKg?.let {
                                     Text(
-                                        "  •  ${"%.1f".format(it)} kg",
+                                        "  •  ${WeightFormatter.format(it, settings.weightUnit)} ${WeightFormatter.label(settings.weightUnit)}",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

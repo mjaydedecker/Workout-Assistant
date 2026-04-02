@@ -1,9 +1,9 @@
 # Implementation Plan
 # Workout-Assistant Android Application
 
-**Version:** 1.0  
+**Version:** 1.2  
 **Date:** 2026-04-02  
-**Based on:** Workout-Assistant-FSD.md v1.0
+**Based on:** Workout-Assistant-FSD.md v1.2
 
 ---
 
@@ -35,6 +35,8 @@ app/src/main/java/com/example/workoutassistant/
 ├── data/
 │   ├── db/
 │   │   ├── AppDatabase.kt
+│   │   ├── migrations/
+│   │   │   └── Migrations.kt              ← all Room Migration objects
 │   │   ├── converters/
 │   │   │   └── InstantConverter.kt
 │   │   ├── dao/
@@ -100,7 +102,9 @@ app/src/main/java/com/example/workoutassistant/
 │   │   ├── SessionHistoryScreen.kt
 │   │   ├── SessionHistoryViewModel.kt
 │   │   ├── SessionDetailScreen.kt
-│   │   └── SessionDetailViewModel.kt
+│   │   ├── SessionDetailViewModel.kt
+│   │   └── components/
+│   │       └── WorkoutCalendar.kt         ← calendar view composable
 │   └── settings/
 │       ├── SettingsScreen.kt
 │       └── SettingsViewModel.kt
@@ -108,7 +112,8 @@ app/src/main/java/com/example/workoutassistant/
 │   ├── TimerManager.kt
 │   ├── CsvExporter.kt
 │   ├── AudioVibrationManager.kt
-│   └── DurationFormatter.kt
+│   ├── DurationFormatter.kt
+│   └── WeightFormatter.kt
 └── MainActivity.kt
 
 app/src/main/res/
@@ -159,6 +164,7 @@ Each layer only depends on the layer below it. ViewModels never import Composabl
    - `kotlinx-coroutines-android`
    - `hilt-android` + `hilt-navigation-compose` (optional; manual DI via `AppContainer` is also acceptable)
    - `sh.calvin.reorderable:reorderable` for drag-and-drop in Compose `LazyColumn`
+   - `com.kizitonwose.calendar:compose` for the history calendar view
 3. `AndroidManifest.xml` — declare `VIBRATE` permission; add `FileProvider` entry pointing to `res/xml/file_paths.xml`.
 4. `res/xml/file_paths.xml` — define scoped path for CSV output directory.
 5. `ui/theme/` — create `Color.kt`, `Type.kt`, `Theme.kt` with both light and dark `ColorScheme` definitions. Theme accepts a `darkTheme: Boolean` parameter driven by settings.
@@ -180,10 +186,10 @@ Each layer only depends on the layer below it. ViewModels never import Composabl
 | `ExerciseEntity.kt` | `@Entity(tableName = "exercises")` — `id`, `name`, `defaultSets` |
 | `WorkoutDayEntity.kt` | `@Entity(tableName = "workout_days")` |
 | `WorkoutDayExerciseEntity.kt` | `@Entity` with foreign keys to exercises and workout_days; `indices` on both FKs; fields: `id`, `workoutDayId`, `exerciseId`, `orderIndex` |
-| `WorkoutSessionEntity.kt` | `startTime` and `endTime` stored as `Long` epoch millis via `InstantConverter` |
+| `WorkoutSessionEntity.kt` | `startTime` and `endTime` stored as `Long` epoch millis via `InstantConverter`; `totalPausedSeconds: Long = 0` accumulates all pause durations |
 | `SessionExerciseEntity.kt` | Snapshot field `exerciseName`; nullable `weightKg: Double?` |
 | `ExerciseDefaultWeightEntity.kt` | Primary key is `exerciseId` (not auto-generated) |
-| `AppSettingsEntity.kt` | Single-row table; fixed PK = 1 |
+| `AppSettingsEntity.kt` | Single-row table; fixed PK = 1; includes `weightUnit: String = "KG"` (KG or LB) |
 | `InstantConverter.kt` | `@TypeConverter` pair: `Long? ↔ Instant?` |
 
 #### 2b — DAOs
@@ -202,7 +208,9 @@ Each layer only depends on the layer below it. ViewModels never import Composabl
 
 #### 2c — Database
 
-- `AppDatabase.kt` — `@Database(entities = [...], version = 1)`, `@TypeConverters(InstantConverter::class)`, abstract DAO accessors, singleton `getInstance` with `fallbackToDestructiveMigration` for v1.
+- `AppDatabase.kt` — `@Database(entities = [...], version = N)`, `@TypeConverters(InstantConverter::class)`, abstract DAO accessors, singleton `getInstance` built with `.addMigrations(*ALL_MIGRATIONS)`. **`fallbackToDestructiveMigration` must not be used in production** — all schema changes require an explicit `Migration` object.
+- `db/migrations/Migrations.kt` — contains all `Migration(from, to)` objects. Each migration uses `ALTER TABLE` / `CREATE TABLE` SQL as needed and supplies `DEFAULT` values for any newly added columns. The constant `ALL_MIGRATIONS` is an array passed to `addMigrations(...)` in `AppDatabase`.
+- The initial schema (version 1) is the baseline; every subsequent version increment adds a new entry to `Migrations.kt` and bumps the version constant in `AppDatabase`.
 
 #### 2d — Domain Models
 
@@ -215,7 +223,7 @@ Non-Room data classes in `data/model/` — these are what ViewModels and UI cons
 |---|---|
 | `ExerciseRepository` | Wraps `ExerciseDao` + `WorkoutDayExerciseDao`; maps entities to domain models; `deleteExercise` surfaces whether the exercise is assigned to a day |
 | `WorkoutDayRepository` | `deleteWorkoutDay` checks for existing sessions; `reorderExercises` updates all `orderIndex` values in a single `withTransaction` |
-| `SessionRepository` | `startSession` creates the session and copies exercises from `WorkoutDayExercise` into `SessionExercise` rows with default weights pre-populated; `updateWeight` saves to both `SessionExercise` and `ExerciseDefaultWeight` atomically |
+| `SessionRepository` | `startSession` creates the session and copies exercises from `WorkoutDayExercise` into `SessionExercise` rows with default weights pre-populated; `updateWeight` saves to both `SessionExercise` and `ExerciseDefaultWeight` atomically (weights always persisted in kg); `accumulatePause(sessionId, seconds)` adds to `totalPausedSeconds` |
 | `SettingsRepository` | Exposes `Flow<AppSettings>`; handles null coalescion from `AppSettingsDao` |
 
 ---
@@ -247,8 +255,10 @@ Non-Room data classes in `data/model/` — these are what ViewModels and UI cons
    - Toggles for sound and vibration (rest and inactivity)
    - Toggle for keep-screen-on
    - Three-option theme selector: Light / Dark / System Default
+   - Two-option weight unit selector: kg / lb
    - All changes applied immediately (no Save button)
 3. Verify theme switching end-to-end.
+4. `WeightFormatter.kt` — `fun formatWeight(weightKg: Double, unit: WeightUnit): String` converting to lb when needed (1 kg = 2.20462 lb) and appending the unit label; used everywhere weights are displayed.
 
 ---
 
@@ -272,11 +282,11 @@ Non-Room data classes in `data/model/` — these are what ViewModels and UI cons
 
 **Tasks:**
 
-1. `WorkoutDayListViewModel.kt` — collects `Flow<List<WorkoutDay>>`; `deleteWorkoutDay` checks for existing sessions and emits a confirmation event.
-2. `WorkoutDayListScreen.kt` — `LazyColumn` showing name and exercise count; swipe-to-delete; FAB to create; tap to open detail.
-3. `WorkoutDayDetailViewModel.kt` — loads `WorkoutDayWithExercises`; `addExercise`, `removeExercise`, `onReorder` (updates all `orderIndex` in a single repository transaction).
+1. `WorkoutDayListViewModel.kt` — collects `Flow<List<WorkoutDay>>`; `deleteWorkoutDay` checks for existing sessions and emits a confirmation event; `renameWorkoutDay(id, newName)` validates non-empty and unique name then persists.
+2. `WorkoutDayListScreen.kt` — `LazyColumn` showing name and exercise count; swipe-to-delete; FAB to create; tap to open detail. Each list item also exposes an inline rename action (e.g., long-press or edit icon) that shows a rename dialog driven by `StateFlow<WorkoutDayPendingRename?>` in the ViewModel.
+3. `WorkoutDayDetailViewModel.kt` — loads `WorkoutDayWithExercises`; `addExercise`, `removeExercise`, `onReorder` (updates all `orderIndex` in a single repository transaction); `renameWorkoutDay(newName)` mirrors the list-level rename.
 4. `WorkoutDayDetailScreen.kt`:
-   - Editable title in top bar
+   - Editable title in top bar — tapping the title switches it to a `TextField`; pressing Done (keyboard) or a checkmark icon calls `renameWorkoutDay` in the ViewModel and reverts to display mode; pressing Back cancels the edit
    - `LazyColumn` with `reorderable` modifier (drag handle on each item)
    - "Add Exercise" opens a bottom sheet listing exercises not yet in the day
    - Drag release triggers `onReorder` in ViewModel
@@ -295,10 +305,12 @@ Non-Room data classes in `data/model/` — these are what ViewModels and UI cons
    - `restTimeRemaining: StateFlow<Long>` (seconds, -1 = idle)
    - `inactivityTimeRemaining: StateFlow<Long>` (seconds, -1 = idle)
    - `fun startOrReset(restSeconds: Int, inactivitySeconds: Int)` — cancels existing jobs; launches two independent coroutine-based countdown flows using `flow { while(...) { emit(tick); delay(1000) } }`
-   - `fun cancel()` — cancels both jobs
+   - `fun pause()` — cancels countdown jobs and records `pausedAtRest` and `pausedAtInactivity` remaining values
+   - `fun resume()` — restarts countdowns from the paused-at values (does not reset to configured duration)
+   - `fun cancel()` — cancels both jobs and clears paused state
 
 2. `AudioVibrationManager.kt` — accepts `Context`:
-   - `fun playTimerAlert()` — `MediaPlayer` with `R.raw.timer_alert`; proper lifecycle (prepare → setOnCompletionListener → release)
+   - `fun playTimerAlert()` — `MediaPlayer` with `R.raw.timer_alert`; audio stream set to `AudioManager.STREAM_MUSIC` via `setAudioStreamType` / `AudioAttributes` so the alert plays when media volume is raised regardless of ringer/silent mode; proper lifecycle (prepare → setOnCompletionListener → release)
    - `fun vibrate(durationMs: Long)` — `VibrationEffect.createOneShot` via `Vibrator` / `VibratorManager` (API 26+)
 
 3. `res/raw/timer_alert.mp3` — add a short alert sound asset.
@@ -318,20 +330,23 @@ Non-Room data classes in `data/model/` — these are what ViewModels and UI cons
    - `decrementSet(id)` — decrement `completedSets` (floor 0), persist; does not touch timers
    - `updateWeight(id, weightKg)` — updates `SessionExercise.weightKg` and calls `SessionRepository.saveDefaultWeight`
    - `deleteExercise(id)` — emits confirmation event; removes from session on confirm
-   - `endSession(notes)` — sets `endTime`, calculates `durationSeconds`, saves, emits `ScreenFlagEvent` to release keep-screen-on
-   - Observes `SettingsRepository.settings` to keep timer durations and alert prefs current
+   - `pauseSession()` — calls `TimerManager.pause()`, records `pauseStartTime`, updates `uiState.isPaused = true`
+   - `resumeSession()` — calls `TimerManager.resume()`, computes elapsed pause seconds, calls `SessionRepository.accumulatePause(...)`, clears `pauseStartTime`, updates `uiState.isPaused = false`
+   - `endSession(notes)` — if currently paused, resumes first to flush final pause duration; sets `endTime`, calculates `durationSeconds = (endTime - startTime) - totalPausedSeconds`, saves, emits `ScreenFlagEvent` to release keep-screen-on
+   - Observes `SettingsRepository.settings` to keep timer durations, alert prefs, and weight unit current
    - On timer expiry, checks sound/vibrate settings and calls `AudioVibrationManager`
 
 2. `ActiveSessionScreen.kt`:
-   - `Scaffold` with top bar showing workout day name and "End Workout" button
-   - `RestTimerWidget` and `InactivityTimerWidget` as sticky header
-   - `LazyColumn` of `ExerciseCard` composables
-   - `DisposableEffect` on window to set/clear `FLAG_KEEP_SCREEN_ON` based on `keepScreenOn` setting
+   - `Scaffold` with top bar showing workout day name, "Pause"/"Resume" button, and "End Workout" button
+   - Screen body is a `Column { TimerPanel; LazyColumn }` — the timer panel sits **outside and above** the `LazyColumn` so it remains fixed on screen regardless of scroll position; it is never placed as an item inside the list
+   - `TimerPanel` — a `Row` containing `RestTimerWidget` and `InactivityTimerWidget`, grayed-out while paused
+   - `LazyColumn` of `ExerciseCard` composables (scrolls independently below the timer panel)
+   - `DisposableEffect` on window to set/clear `FLAG_KEEP_SCREEN_ON` based on `keepScreenOn` setting (flag remains set while paused)
 
 3. `ExerciseCard.kt`:
    - Exercise name, `"X / Y sets"` progress
    - `+` button (disabled when complete), `-` button (disabled at 0)
-   - Decimal `TextField` for weight
+   - Decimal `TextField` for weight; label reflects active weight unit from settings via `WeightFormatter`
    - Visual "completed" state (green tint / checkmark) when `completedSets == targetSets`
    - Swipe-to-delete with confirmation
 
@@ -347,21 +362,41 @@ Non-Room data classes in `data/model/` — these are what ViewModels and UI cons
 
 ### Milestone 9 — Session History and CSV Export
 
-**Goal:** Read-only history views and CSV export.
+**Goal:** List and calendar history views, session detail, and CSV export.
 
 **Tasks:**
 
-1. `SessionHistoryViewModel.kt` — collects `Flow<List<WorkoutSession>>`; maps to `SessionSummaryUiModel` (formatted date, time, duration); `exportCsv()` delegates to `CsvExporter`.
-2. `SessionHistoryScreen.kt` — reverse-chronological `LazyColumn`; each item shows day name, date/time, duration, exercise count; tap to detail; top bar "Export CSV" action.
-3. `SessionDetailViewModel.kt` — loads `WorkoutSession` + `List<SessionExercise>` by `sessionId`.
-4. `SessionDetailScreen.kt` — day name, date, start/end times, duration, notes, `LazyColumn` of per-exercise rows (name, sets, weight).
-5. `CsvExporter.kt`:
+1. `SessionHistoryViewModel.kt`:
+   - Collects `Flow<List<WorkoutSession>>`; maps to `SessionSummaryUiModel` (formatted date, time, duration, exercise count)
+   - Exposes `selectedView: StateFlow<HistoryView>` (enum: LIST, CALENDAR) toggled by `setView(view)`
+   - Exposes `selectedCalendarDate: StateFlow<LocalDate?>` and `sessionsForSelectedDate: StateFlow<List<SessionSummaryUiModel>>`; `selectDate(date)` updates both
+   - `exportCsv()` delegates to `CsvExporter`
+
+2. `SessionHistoryScreen.kt`:
+   - Top bar with "Export CSV" action
+   - Segmented button (List / Calendar) below the top bar, bound to `selectedView`
+   - **List view**: reverse-chronological `LazyColumn`; each item shows day name, date/time, duration, exercise count; tap navigates to Session Detail
+   - **Calendar view**: `WorkoutCalendar` composable showing the current month; navigates between months with prev/next arrows; days with sessions are marked with a dot; tapping a marked date sets `selectedCalendarDate` and shows a `SessionDaySummary` panel below the calendar listing that day's sessions; tapping a session in the panel navigates to Session Detail
+
+3. `WorkoutCalendar.kt` (in `ui/history/components/`):
+   - Uses `com.kizitonwose.calendar:compose` `HorizontalCalendar` or `VerticalCalendar`
+   - Accepts `sessionDates: Set<LocalDate>` and `selectedDate: LocalDate?` as parameters
+   - Day cell renders a dot indicator when the date is in `sessionDates`; highlights `selectedDate`
+   - Emits `onDayClick(LocalDate)` callback
+
+4. `SessionDetailViewModel.kt` — loads `WorkoutSession` + `List<SessionExercise>` by `sessionId`; observes settings for weight unit.
+
+5. `SessionDetailScreen.kt` — day name, date, start/end times, duration, notes, `LazyColumn` of per-exercise rows (name, sets, weight displayed via `WeightFormatter` using active unit from settings).
+
+6. `CsvExporter.kt`:
    - Columns: Session Date, Start Time, End Time, Duration, Workout Day, Exercise, Sets Completed, Target Sets, Weight (kg), Notes
+   - Weight column always exported in kg regardless of display unit setting
    - One row per exercise per session
    - File name: `workout_history_YYYYMMDD_HHMMSS.csv`
-   - Written to `context.cacheDir` (API 26–28) or `MediaStore.Downloads` (API 29+) and wrapped in a `FileProvider` URI
+   - Written to `context.cacheDir` and wrapped in a `FileProvider` URI
    - Caller emits `ShareCsvEvent(uri)`; screen starts `Intent.ACTION_SEND`
-6. `DurationFormatter.kt` — `Long.toHhMmSs(): String` and `Long.toMmSs(): String` used across session display and timer widgets.
+
+7. `DurationFormatter.kt` — `Long.toHhMmSs(): String` and `Long.toMmSs(): String` used across session display and timer widgets.
 
 ---
 
@@ -386,16 +421,18 @@ Non-Room data classes in `data/model/` — these are what ViewModels and UI cons
 
 **Tasks:**
 
-1. Add `contentDescription` to all `IconButton`, `Image`, and custom `Canvas` composables.
-2. Verify WCAG AA color contrast (4.5:1 for normal text) in both themes; adjust `Color.kt` as needed.
-3. Confirm `VIBRATE` permission and `FileProvider` config are correct for all API levels 26–latest.
-4. Test screen rotation on the Active Session screen — timers must not reset (they live in `viewModelScope`).
-5. Handle the edge case where an exercise is deleted while an active session is running — the session ViewModel reacts to the updated `Flow<List<SessionExercise>>` emission automatically; no crash.
-6. Add empty-state UI (illustration + prompt) to `ExerciseListScreen`, `WorkoutDayListScreen`, and `SessionHistoryScreen`.
-7. Set correct `keyboardOptions` and `keyboardActions` on all `TextField` inputs:
+1. Replace the default Android launcher icon with a dumbbell icon: create adaptive icon assets (`ic_launcher_foreground.xml` vector + `ic_launcher_background.xml`) and update `AndroidManifest.xml` `android:icon` and `android:roundIcon` references.
+2. Add `contentDescription` to all `IconButton`, `Image`, and custom `Canvas` composables.
+3. Verify WCAG AA color contrast (4.5:1 for normal text) in both themes; adjust `Color.kt` as needed.
+4. Confirm `VIBRATE` permission and `FileProvider` config are correct for all API levels 26–latest.
+5. Test screen rotation on the Active Session screen — timers must not reset (they live in `viewModelScope`); verify paused state also survives rotation.
+6. Handle the edge case where an exercise is deleted while an active session is running — the session ViewModel reacts to the updated `Flow<List<SessionExercise>>` emission automatically; no crash.
+7. Add empty-state UI (illustration + prompt) to `ExerciseListScreen`, `WorkoutDayListScreen`, and `SessionHistoryScreen`.
+8. Set correct `keyboardOptions` and `keyboardActions` on all `TextField` inputs:
    - `KeyboardType.Decimal` for weight fields
    - `KeyboardType.Number` for set count and duration fields
    - `ImeAction.Done` on the last field in each form
+9. Verify Room migration chain: for every database version increment confirm a `Migration(from, to)` exists in `Migrations.kt`; write a local unit test using `MigrationTestHelper` (Room testing artifact) to validate that upgrading from each prior version preserves all existing rows and correctly populates default values in new columns.
 
 ---
 
@@ -413,6 +450,12 @@ Non-Room data classes in `data/model/` — these are what ViewModels and UI cons
 | `ExerciseDefaultWeight` as a separate table | Clean separation; can be independently managed; PK = `exerciseId` makes upsert trivially correct |
 | No Hilt (or optional) | Reduces annotation processing complexity; an `AppContainer` on a custom `Application` class is sufficient |
 | `BottomNavigationBar` for top-level navigation | Standard Material 3 pattern; Active Session hides the bar (full-screen destination) |
+| Pause duration accumulated in `WorkoutSession.totalPausedSeconds` | Computed at `endSession` as `(endTime - startTime) - totalPausedSeconds`; each resume flushes the just-elapsed pause into the DB so a crash doesn't lose it |
+| Weights stored in kg, converted at UI layer | `WeightFormatter` converts for display; CSV always exports in kg with clear column header — no ambiguity in stored data |
+| Explicit Room migrations (no destructive fallback) | Data retention across app updates is a hard requirement (FSD 8.8); each schema version increment gets a `Migration(from, to)` object; `MigrationTestHelper` tests guard against regressions |
+| `kizitonwose/calendar:compose` for calendar view | Provides a production-quality Compose-native calendar; avoids building month grid layout from scratch; exposes `HorizontalCalendar` / `VerticalCalendar` with fully customisable day cells |
+| Timer panel placed outside `LazyColumn` | Using `Column { TimerPanel; LazyColumn }` rather than a sticky list header is simpler and guarantees the panel never scrolls off screen; sticky headers in `LazyColumn` require `stickyHeader {}` which can interact unexpectedly with item keys |
+| Workout Day renaming from both list and detail | Two entry points (list item edit action + detail screen top-bar inline edit) share the same `renameWorkoutDay` repository call; ViewModel state machine tracks pending rename independently in each screen |
 
 ---
 
@@ -427,3 +470,4 @@ These files are the highest-risk, highest-complexity files in the project. Get t
 | `data/repository/SessionRepository.kt` | Wraps the most tables; contains transactional `startSession` and `updateWeight` logic that must be atomic |
 | `util/TimerManager.kt` | The countdown engine; dual timers, reset-on-set, and expiry callbacks are all centralized here; must be correct before the session screen can be built |
 | `ui/navigation/NavGraph.kt` | Single source of truth for all routes and argument definitions; any route change cascades across every navigation call site in the app |
+| `util/WeightFormatter.kt` | Used everywhere a weight value is displayed; must correctly handle kg↔lb conversion and unit labeling consistently across session, history, and detail screens |

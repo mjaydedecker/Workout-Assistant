@@ -31,7 +31,8 @@ data class ActiveSessionUiState(
     val weightPromptForExerciseId: Long? = null,
     val showEndDialog: Boolean = false,
     val pendingRemoveExerciseId: Long? = null,
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val isPaused: Boolean = false
 )
 
 class ActiveSessionViewModel(
@@ -49,6 +50,9 @@ class ActiveSessionViewModel(
     private val _weightPrompt = MutableStateFlow<Long?>(null)
     private val _showEndDialog = MutableStateFlow(false)
     private val _pendingRemove = MutableStateFlow<Long?>(null)
+
+    private val _isPaused = MutableStateFlow(false)
+    private var pauseStartEpoch: Long = 0L
 
     private val _sessionEnded = MutableSharedFlow<Unit>()
     val sessionEnded: SharedFlow<Unit> = _sessionEnded
@@ -69,9 +73,10 @@ class ActiveSessionViewModel(
         },
         settingsFlow,
         _weightPrompt,
-        _showEndDialog,
-        _pendingRemove
-    ) { (session, exercises), settings, weightPrompt, showEnd, pendingRemove ->
+        combine(_showEndDialog, _pendingRemove, _isPaused) { showEnd, pendingRemove, isPaused ->
+            Triple(showEnd, pendingRemove, isPaused)
+        }
+    ) { (session, exercises), settings, weightPrompt, (showEnd, pendingRemove, isPaused) ->
         ActiveSessionUiState(
             session = session,
             exercises = exercises,
@@ -79,7 +84,8 @@ class ActiveSessionViewModel(
             weightPromptForExerciseId = weightPrompt,
             showEndDialog = showEnd,
             pendingRemoveExerciseId = pendingRemove,
-            isLoading = _sessionId.value == null
+            isLoading = _sessionId.value == null,
+            isPaused = isPaused
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ActiveSessionUiState())
 
@@ -157,9 +163,35 @@ class ActiveSessionViewModel(
     fun showEndDialog() = _showEndDialog.update { true }
     fun hideEndDialog() = _showEndDialog.update { false }
 
+    fun pauseSession() {
+        if (_isPaused.value) return
+        timerManager.pause()
+        pauseStartEpoch = System.currentTimeMillis() / 1000L
+        _isPaused.update { true }
+    }
+
+    fun resumeSession() {
+        if (!_isPaused.value) return
+        val pausedSeconds = (System.currentTimeMillis() / 1000L) - pauseStartEpoch
+        pauseStartEpoch = 0L
+        _isPaused.update { false }
+        timerManager.resume()
+        viewModelScope.launch {
+            val id = _sessionId.value ?: return@launch
+            if (pausedSeconds > 0) sessionRepository.accumulatePause(id, pausedSeconds)
+        }
+    }
+
     fun endSession(notes: String?) {
         viewModelScope.launch {
             val id = _sessionId.value ?: return@launch
+            // Flush any in-progress pause before ending
+            if (_isPaused.value) {
+                val pausedSeconds = (System.currentTimeMillis() / 1000L) - pauseStartEpoch
+                if (pausedSeconds > 0) sessionRepository.accumulatePause(id, pausedSeconds)
+                pauseStartEpoch = 0L
+                _isPaused.update { false }
+            }
             sessionRepository.endSession(id, notes?.ifBlank { null })
             timerManager.cancel()
             _showEndDialog.update { false }

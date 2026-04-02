@@ -9,5 +9,6 @@ data class WorkoutSession(
     val startTime: Instant,
     val endTime: Instant? = null,
     val durationSeconds: Long? = null,
+    val totalPausedSeconds: Long = 0,
     val notes: String? = null
 )

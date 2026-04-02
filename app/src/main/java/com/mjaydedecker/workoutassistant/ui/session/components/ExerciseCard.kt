@@ -36,19 +36,22 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.mjaydedecker.workoutassistant.data.model.SessionExercise
+import com.mjaydedecker.workoutassistant.data.model.WeightUnit
 import com.mjaydedecker.workoutassistant.ui.theme.CompletedColor
+import com.mjaydedecker.workoutassistant.util.WeightFormatter
 
 @Composable
 fun ExerciseCard(
     exercise: SessionExercise,
+    weightUnit: WeightUnit = WeightUnit.KG,
     onMarkComplete: () -> Unit,
     onDecrement: () -> Unit,
     onWeightChanged: (Double) -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var weightText by remember(exercise.id, exercise.weightKg) {
-        mutableStateOf(exercise.weightKg?.let { "%.1f".format(it) } ?: "")
+    var weightText by remember(exercise.id, exercise.weightKg, weightUnit) {
+        mutableStateOf(exercise.weightKg?.let { WeightFormatter.format(it, weightUnit) } ?: "")
     }
 
     val cardColor = if (exercise.isCompleted)
@@ -124,7 +127,7 @@ fun ExerciseCard(
                 OutlinedTextField(
                     value = weightText,
                     onValueChange = { weightText = it },
-                    label = { Text("Weight (kg)") },
+                    label = { Text("Weight (${WeightFormatter.label(weightUnit)})") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Decimal,
@@ -135,7 +138,9 @@ fun ExerciseCard(
                 Spacer(Modifier.width(8.dp))
                 TextButton(
                     onClick = {
-                        weightText.toDoubleOrNull()?.let { onWeightChanged(it) }
+                        weightText.toDoubleOrNull()?.let { displayValue ->
+                            onWeightChanged(WeightFormatter.toKg(displayValue, weightUnit))
+                        }
                     }
                 ) {
                     Text("Set")

@@ -1,6 +1,8 @@
 package com.mjaydedecker.workoutassistant.util
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.VibrationEffect
@@ -10,11 +12,20 @@ import com.mjaydedecker.workoutassistant.R
 
 class AudioVibrationManager(private val context: Context) {
 
+    private val mediaAudioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .build()
+
     fun playTimerAlert() {
         try {
-            val mp = MediaPlayer.create(context, R.raw.timer_alert)
-            mp.setOnCompletionListener { it.release() }
-            mp.start()
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val sessionId = audioManager.generateAudioSessionId()
+            val mp = MediaPlayer.create(context, R.raw.timer_alert, mediaAudioAttributes, sessionId)
+            mp?.apply {
+                setOnCompletionListener { it.release() }
+                start()
+            }
         } catch (_: Exception) {
         }
     }

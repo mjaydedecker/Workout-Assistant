@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -44,6 +45,7 @@ import com.mjaydedecker.workoutassistant.ui.session.components.ExerciseCard
 import com.mjaydedecker.workoutassistant.ui.session.components.RestTimerWidget
 import com.mjaydedecker.workoutassistant.ui.theme.InactivityTimerColor
 import com.mjaydedecker.workoutassistant.ui.theme.RestTimerColor
+import com.mjaydedecker.workoutassistant.util.WeightFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,6 +90,15 @@ fun ActiveSessionScreen(
                 title = { Text(uiState.session?.workoutDayName ?: "Workout") },
                 actions = {
                     Button(
+                        onClick = {
+                            if (uiState.isPaused) viewModel.resumeSession()
+                            else viewModel.pauseSession()
+                        }
+                    ) {
+                        Text(if (uiState.isPaused) "Resume" else "Pause")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
                         onClick = { viewModel.showEndDialog() },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
@@ -102,39 +113,40 @@ fun ActiveSessionScreen(
                 CircularProgressIndicator()
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding)
-            ) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        RestTimerWidget(
-                            timeRemaining = restTime,
-                            totalSeconds = uiState.settings.restTimerSeconds,
-                            color = RestTimerColor,
-                            label = "Rest"
-                        )
-                        Spacer(Modifier.width(16.dp))
-                        RestTimerWidget(
-                            timeRemaining = inactivityTime,
-                            totalSeconds = uiState.settings.inactivityTimerSeconds,
-                            color = InactivityTimerColor,
-                            label = "Inactivity"
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                // Fixed timer panel — always visible, never scrolls
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    RestTimerWidget(
+                        timeRemaining = restTime,
+                        totalSeconds = uiState.settings.restTimerSeconds,
+                        color = RestTimerColor,
+                        label = "Rest"
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    RestTimerWidget(
+                        timeRemaining = inactivityTime,
+                        totalSeconds = uiState.settings.inactivityTimerSeconds,
+                        color = InactivityTimerColor,
+                        label = "Inactivity"
+                    )
+                }
+                HorizontalDivider()
+
+                // Scrollable exercise list below the fixed timer panel
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(uiState.exercises, key = { it.id }) { exercise ->
+                        ExerciseCard(
+                            exercise = exercise,
+                            weightUnit = uiState.settings.weightUnit,
+                            onMarkComplete = { viewModel.markSetComplete(exercise.id) },
+                            onDecrement = { viewModel.decrementSet(exercise.id) },
+                            onWeightChanged = { weight -> viewModel.updateWeight(exercise.id, weight) },
+                            onRemove = { viewModel.requestRemoveExercise(exercise.id) }
                         )
                     }
-                    HorizontalDivider()
-                }
-
-                items(uiState.exercises, key = { it.id }) { exercise ->
-                    ExerciseCard(
-                        exercise = exercise,
-                        onMarkComplete = { viewModel.markSetComplete(exercise.id) },
-                        onDecrement = { viewModel.decrementSet(exercise.id) },
-                        onWeightChanged = { weight -> viewModel.updateWeight(exercise.id, weight) },
-                        onRemove = { viewModel.requestRemoveExercise(exercise.id) }
-                    )
                 }
             }
         }
@@ -166,6 +178,7 @@ fun ActiveSessionScreen(
         // Weight input prompt
         uiState.weightPromptForExerciseId?.let { exerciseId ->
             val exercise = uiState.exercises.find { it.exerciseId == exerciseId }
+            val weightUnit = uiState.settings.weightUnit
             var weightInput by remember { mutableStateOf("") }
             AlertDialog(
                 onDismissRequest = { viewModel.dismissWeightPrompt() },
@@ -176,7 +189,7 @@ fun ActiveSessionScreen(
                         OutlinedTextField(
                             value = weightInput,
                             onValueChange = { weightInput = it },
-                            label = { Text("Weight (kg)") },
+                            label = { Text("Weight (${WeightFormatter.label(weightUnit)})") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                         )
@@ -185,9 +198,10 @@ fun ActiveSessionScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            weightInput.toDoubleOrNull()?.let { weight ->
+                            weightInput.toDoubleOrNull()?.let { displayValue ->
+                                val weightKg = WeightFormatter.toKg(displayValue, weightUnit)
                                 val seId = uiState.exercises.find { it.exerciseId == exerciseId }?.id
-                                if (seId != null) viewModel.updateWeight(seId, weight)
+                                if (seId != null) viewModel.updateWeight(seId, weightKg)
                             } ?: viewModel.dismissWeightPrompt()
                         }
                     ) { Text("Save") }

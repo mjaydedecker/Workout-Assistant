@@ -13,5 +13,6 @@ data class AppSettingsEntity(
     val inactivityTimerSound: Boolean = true,
     val inactivityTimerVibrate: Boolean = true,
     val keepScreenOn: Boolean = true,
-    val themeMode: String = "SYSTEM"
+    val themeMode: String = "SYSTEM",
+    val weightUnit: String = "KG"
 )

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.mjaydedecker.workoutassistant.data.model.AppSettings
 import com.mjaydedecker.workoutassistant.data.model.ThemeMode
+import com.mjaydedecker.workoutassistant.data.model.WeightUnit
 import com.mjaydedecker.workoutassistant.data.repository.SettingsRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,7 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
     fun setInactivityTimerVibrate(enabled: Boolean) = update { copy(inactivityTimerVibrate = enabled) }
     fun setKeepScreenOn(enabled: Boolean) = update { copy(keepScreenOn = enabled) }
     fun setThemeMode(mode: ThemeMode) = update { copy(themeMode = mode) }
+    fun setWeightUnit(unit: WeightUnit) = update { copy(weightUnit = unit) }
 }
 
 class SettingsViewModelFactory(private val repository: SettingsRepository) : ViewModelProvider.Factory {

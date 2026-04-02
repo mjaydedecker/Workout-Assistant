@@ -18,16 +18,22 @@ class TimerManager(private val scope: CoroutineScope) {
 
     private var restJob: Job? = null
     private var inactivityJob: Job? = null
+    private var pausedRestRemaining: Long = -1L
+    private var pausedInactivityRemaining: Long = -1L
 
     var onRestExpired: (() -> Unit)? = null
     var onInactivityExpired: (() -> Unit)? = null
 
     fun startOrReset(restSeconds: Int, inactivitySeconds: Int) {
+        pausedRestRemaining = -1L
+        pausedInactivityRemaining = -1L
         restJob?.cancel()
         inactivityJob?.cancel()
+        // Set values synchronously so UI reflects the new duration immediately
+        _restTimeRemaining.value = restSeconds.toLong()
+        _inactivityTimeRemaining.value = inactivitySeconds.toLong()
 
         restJob = scope.launch {
-            _restTimeRemaining.value = restSeconds.toLong()
             while (_restTimeRemaining.value > 0) {
                 delay(1000L)
                 _restTimeRemaining.value -= 1
@@ -36,7 +42,6 @@ class TimerManager(private val scope: CoroutineScope) {
         }
 
         inactivityJob = scope.launch {
-            _inactivityTimeRemaining.value = inactivitySeconds.toLong()
             while (_inactivityTimeRemaining.value > 0) {
                 delay(1000L)
                 _inactivityTimeRemaining.value -= 1
@@ -45,9 +50,49 @@ class TimerManager(private val scope: CoroutineScope) {
         }
     }
 
+    fun pause() {
+        pausedRestRemaining = _restTimeRemaining.value
+        pausedInactivityRemaining = _inactivityTimeRemaining.value
+        restJob?.cancel()
+        inactivityJob?.cancel()
+    }
+
+    fun resume() {
+        val restRemaining = pausedRestRemaining
+        val inactivityRemaining = pausedInactivityRemaining
+        pausedRestRemaining = -1L
+        pausedInactivityRemaining = -1L
+
+        if (restRemaining > 0) {
+            _restTimeRemaining.value = restRemaining
+            restJob?.cancel()
+            restJob = scope.launch {
+                while (_restTimeRemaining.value > 0) {
+                    delay(1000L)
+                    _restTimeRemaining.value -= 1
+                }
+                if (_restTimeRemaining.value == 0L) onRestExpired?.invoke()
+            }
+        }
+
+        if (inactivityRemaining > 0) {
+            _inactivityTimeRemaining.value = inactivityRemaining
+            inactivityJob?.cancel()
+            inactivityJob = scope.launch {
+                while (_inactivityTimeRemaining.value > 0) {
+                    delay(1000L)
+                    _inactivityTimeRemaining.value -= 1
+                }
+                if (_inactivityTimeRemaining.value == 0L) onInactivityExpired?.invoke()
+            }
+        }
+    }
+
     fun cancel() {
         restJob?.cancel()
         inactivityJob?.cancel()
+        pausedRestRemaining = -1L
+        pausedInactivityRemaining = -1L
         _restTimeRemaining.value = -1L
         _inactivityTimeRemaining.value = -1L
     }

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mjaydedecker.workoutassistant.WorkoutAssistantApp
 import com.mjaydedecker.workoutassistant.data.model.ThemeMode
+import com.mjaydedecker.workoutassistant.data.model.WeightUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,6 +126,25 @@ fun SettingsScreen(app: WorkoutAssistantApp) {
                         onClick = { viewModel.setThemeMode(mode) },
                         shape = SegmentedButtonDefaults.itemShape(index, themeOptions.size),
                         label = { Text(themeLabels[index]) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Text("Weight Unit", style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(8.dp))
+
+            val weightUnitOptions = listOf(WeightUnit.KG, WeightUnit.LB)
+            val weightUnitLabels = listOf("kg", "lb")
+
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                weightUnitOptions.forEachIndexed { index, unit ->
+                    SegmentedButton(
+                        selected = settings.weightUnit == unit,
+                        onClick = { viewModel.setWeightUnit(unit) },
+                        shape = SegmentedButtonDefaults.itemShape(index, weightUnitOptions.size),
+                        label = { Text(weightUnitLabels[index]) }
                     )
                 }
             }

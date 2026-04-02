@@ -1,6 +1,7 @@
 package com.mjaydedecker.workoutassistant.data.model
 
 enum class ThemeMode { LIGHT, DARK, SYSTEM }
+enum class WeightUnit { KG, LB }
 
 data class AppSettings(
     val restTimerSeconds: Int = 90,
@@ -10,5 +11,6 @@ data class AppSettings(
     val inactivityTimerSound: Boolean = true,
     val inactivityTimerVibrate: Boolean = true,
     val keepScreenOn: Boolean = true,
-    val themeMode: ThemeMode = ThemeMode.SYSTEM
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val weightUnit: WeightUnit = WeightUnit.KG
 )

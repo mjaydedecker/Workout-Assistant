@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +49,7 @@ fun WorkoutDayListScreen(
     )
     val days by viewModel.workoutDays.collectAsState()
     val pendingDelete by viewModel.pendingDelete.collectAsState()
+    val pendingRename by viewModel.pendingRename.collectAsState()
     val showCreate by viewModel.showCreateDialog.collectAsState()
 
     Scaffold(
@@ -76,6 +78,9 @@ fun WorkoutDayListScreen(
                                     IconButton(onClick = { onStartSession(day.id) }) {
                                         Icon(Icons.Default.PlayArrow, contentDescription = "Start ${day.name}")
                                     }
+                                    IconButton(onClick = { viewModel.requestRename(day) }) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Rename ${day.name}")
+                                    }
                                     IconButton(onClick = { viewModel.requestDelete(day) }) {
                                         Icon(Icons.Default.Delete, contentDescription = "Delete ${day.name}")
                                     }
@@ -95,6 +100,14 @@ fun WorkoutDayListScreen(
             )
         }
 
+        pendingRename?.let { day ->
+            RenameDayDialog(
+                currentName = day.name,
+                onConfirm = { viewModel.confirmRename(it) },
+                onDismiss = { viewModel.cancelRename() }
+            )
+        }
+
         pendingDelete?.let { day ->
             AlertDialog(
                 onDismissRequest = { viewModel.cancelDelete() },
@@ -109,6 +122,30 @@ fun WorkoutDayListScreen(
             )
         }
     }
+}
+
+@Composable
+private fun RenameDayDialog(currentName: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf(currentName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename Workout Day") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Name") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { if (name.isNotBlank()) onConfirm(name) }, enabled = name.isNotBlank()) {
+                Text("Rename")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable

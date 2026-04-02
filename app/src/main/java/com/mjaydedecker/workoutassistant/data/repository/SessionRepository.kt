@@ -79,17 +79,22 @@ class SessionRepository(
         exerciseDefaultWeightDao.upsert(ExerciseDefaultWeightEntity(exerciseId, weightKg))
     }
 
+    suspend fun accumulatePause(sessionId: Long, pausedSeconds: Long) {
+        val session = workoutSessionDao.getById(sessionId) ?: return
+        workoutSessionDao.update(session.copy(totalPausedSeconds = session.totalPausedSeconds + pausedSeconds))
+    }
+
     suspend fun endSession(sessionId: Long, notes: String?) {
         val session = workoutSessionDao.getById(sessionId) ?: return
         val endTime = Instant.now()
-        val duration = endTime.epochSecond - session.startTime.epochSecond
+        val duration = (endTime.epochSecond - session.startTime.epochSecond) - session.totalPausedSeconds
         workoutSessionDao.update(
-            session.copy(endTime = endTime, durationSeconds = duration, notes = notes)
+            session.copy(endTime = endTime, durationSeconds = duration.coerceAtLeast(0), notes = notes)
         )
     }
 
     private fun WorkoutSessionEntity.toDomain() = WorkoutSession(
-        id, workoutDayId, workoutDayName, startTime, endTime, durationSeconds, notes
+        id, workoutDayId, workoutDayName, startTime, endTime, durationSeconds, totalPausedSeconds, notes
     )
 
     private fun SessionExerciseEntity.toDomain() = SessionExercise(

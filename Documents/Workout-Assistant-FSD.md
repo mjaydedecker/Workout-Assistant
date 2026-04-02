@@ -1,8 +1,8 @@
 # Functional Specification Document
 # Workout-Assistant Android Application
 
-**Version:** 1.0  
-**Date:** 2026-04-01  
+**Version:** 1.2  
+**Date:** 2026-04-02  
 **Platform:** Android (Native)  
 **Language:** Kotlin  
 **Repository:** https://github.com/mjaydedecker/Workout-Assistant
@@ -20,7 +20,7 @@
    - 5.2 [Workout Day Management](#52-workout-day-management)
    - 5.3 [Workout Session](#53-workout-session)
    - 5.4 [Weight Tracking](#54-weight-tracking)
-   - 5.5 [Session History](#55-session-history)
+   - 5.5 [Session History](#55-session-history) (List and Calendar views)
    - 5.6 [CSV Export](#56-csv-export)
    - 5.7 [Rest Timer](#57-rest-timer)
    - 5.8 [Inactivity Timer](#58-inactivity-timer)
@@ -86,7 +86,8 @@ Join table associating exercises to workout days, with ordering.
 | workoutDayId | Long (FK) | Reference to WorkoutDay |
 | startTime | Instant | Timestamp when session was started |
 | endTime | Instant? | Timestamp when session was ended (null if in progress) |
-| durationSeconds | Long? | Total session duration in seconds |
+| durationSeconds | Long? | Total active session duration in seconds (excludes paused time) |
+| totalPausedSeconds | Long | 0 | Total time spent paused across all pause/resume cycles |
 | notes | String? | Optional notes added at session end |
 
 ### 4.5 SessionExercise
@@ -127,6 +128,7 @@ Single-row settings table.
 | inactivityTimerVibrate | Boolean | true | Vibrate when inactivity timer expires |
 | keepScreenOn | Boolean | true | Keep screen on during active workout session |
 | darkMode | Boolean | (system) | Dark or light theme override |
+| weightUnit | Enum (KG, LB) | KG | Unit used for displaying and entering weights |
 
 ---
 
@@ -171,6 +173,10 @@ Single-row settings table.
 
 #### 5.2.3 Edit Workout Day Name
 - The user can rename an existing workout day.
+- Renaming is accessible from two entry points:
+  - **Workout Day List** — via an edit action on the list item (e.g., long-press menu or edit icon).
+  - **Workout Day Detail** — via an editable title field in the screen's top bar; changes are saved when the user confirms (e.g., taps a checkmark or presses Done on the keyboard).
+- The new name must be non-empty and unique among workout days; validation errors are shown inline.
 
 #### 5.2.4 Delete Workout Day
 - The user can delete a workout day.
@@ -195,7 +201,8 @@ Single-row settings table.
 - Only one session may be active at a time. If a session is already in progress, the user is taken directly to that session screen.
 
 #### 5.3.2 Session Exercise List
-- Each exercise in the session is displayed as a card showing:
+- The timer panel (rest timer and inactivity timer) is displayed in a **fixed, non-scrolling area** at the top of the session screen, always visible regardless of how far the user has scrolled through the exercise list.
+- Each exercise in the session is displayed as a card in a scrollable list below the fixed timer panel, showing:
   - Exercise name
   - Set progress indicator (e.g., "2 / 4 sets")
   - Weight field (editable)
@@ -225,9 +232,18 @@ Single-row settings table.
 #### 5.3.7 End a Session
 - The user taps an "End Workout" button.
 - The user is presented with a dialog to optionally enter session notes.
-- On confirming end, the session's `endTime` is recorded, `durationSeconds` is calculated, and the session is saved.
+- On confirming end, the session's `endTime` is recorded, `durationSeconds` is calculated as total elapsed time minus `totalPausedSeconds`, and the session is saved.
 - The screen transitions to the Session Summary screen (or History screen).
 - The keep-screen-on flag is released once the session ends.
+
+#### 5.3.8 Pause and Resume a Session
+- The user can tap a "Pause" button on the active session screen to pause the workout.
+- While paused, the session screen shows a "Resume" button in place of the pause button.
+- The rest and inactivity timers are suspended while the session is paused.
+- When the user taps "Resume", the timers resume from where they left off and pause time accumulates into `totalPausedSeconds`.
+- Multiple pause/resume cycles are supported; all pause durations are accumulated.
+- `durationSeconds` at session end reflects only active (non-paused) time.
+- The keep-screen-on flag remains active during a paused session, as the session has not ended.
 
 ---
 
@@ -235,7 +251,8 @@ Single-row settings table.
 
 #### 5.4.1 Enter Weight for an Exercise
 - When the user completes the first set of an exercise in a session, if no weight is recorded yet, a weight input prompt appears.
-- The weight is entered in kilograms (decimal supported, e.g., 22.5 kg).
+- The weight input label and placeholder reflect the active weight unit (kg or lb) from settings.
+- Weights are stored internally in kilograms regardless of display unit; conversion is applied at the UI layer.
 - The entered weight is saved to the `SessionExercise` record.
 - The weight is also saved to `ExerciseDefaultWeight` so it becomes the pre-populated default for future sessions.
 
@@ -250,17 +267,30 @@ Single-row settings table.
 
 ### 5.5 Session History
 
-#### 5.5.1 View History List
-- The user can navigate to a history screen listing all completed workout sessions.
-- Sessions are listed in reverse chronological order (most recent first).
+#### 5.5.1 View Toggle: List and Calendar
+- The history screen provides two views, switchable via a toggle (e.g., tab bar or segmented button):
+  - **List view** (default)
+  - **Calendar view**
+- The selected view is remembered for the duration of the app session.
+
+#### 5.5.2 List View
+- All completed workout sessions are listed in reverse chronological order (most recent first).
 - Each list item shows:
   - Workout day name
   - Date and time of session
   - Total duration (formatted as HH:MM:SS or MM:SS)
   - Number of exercises performed
+- Tapping a session navigates to the Session Detail screen.
 
-#### 5.5.2 View Session Detail
-- The user can tap a session to view full details:
+#### 5.5.3 Calendar View
+- A monthly calendar is displayed with days that have one or more completed sessions visually indicated (e.g., a dot or highlight on the date).
+- The user can navigate between months using previous/next controls.
+- Tapping a date that has sessions shows a brief summary list of that day's sessions below the calendar (or as a bottom sheet).
+- Tapping a session from the day summary navigates to the Session Detail screen.
+- Days with no sessions are tappable but produce no action.
+
+#### 5.5.4 View Session Detail
+- The user can tap a session (from either the list view or the calendar view) to view full details:
   - Workout day name
   - Date, start time, end time
   - Total duration
@@ -288,7 +318,7 @@ Single-row settings table.
 | Exercise | Exercise name |
 | Sets Completed | Number of sets completed |
 | Target Sets | Target number of sets |
-| Weight (kg) | Weight used |
+| Weight (kg) | Weight used, always exported in kg regardless of display unit setting |
 | Notes | Session notes |
 
 - One row per exercise per session.
@@ -302,11 +332,11 @@ Single-row settings table.
 #### 5.7.1 Timer Behavior
 - The rest timer counts down from the configured `restTimerSeconds` value.
 - It starts (or resets) each time the user marks a set as performed.
-- It is visible on the active session screen showing remaining time as a progress indicator (e.g., circular arc or progress bar) and a MM:SS countdown.
+- It is displayed in the fixed timer panel at the top of the active session screen (see 5.3.2), always visible regardless of scroll position, showing remaining time as a progress indicator (e.g., circular arc or progress bar) and a MM:SS countdown.
 
 #### 5.7.2 Timer Expiry
 - When the rest timer reaches zero:
-  - If `restTimerSound` is enabled, an audible alert is played.
+  - If `restTimerSound` is enabled, an audible alert is played using the **media audio stream** (`AudioManager.STREAM_MUSIC`). This ensures the alert is audible whenever the media volume is raised, regardless of the device ringer/silent mode.
   - If `restTimerVibrate` is enabled, the device vibrates.
   - The progress indicator reflects the expired state.
 - The timer does not loop after expiry.
@@ -322,11 +352,11 @@ Single-row settings table.
 - The inactivity timer counts down from the configured `inactivityTimerSeconds` value.
 - It starts (or resets) each time the user marks a set as performed.
 - It runs concurrently with the rest timer.
-- It is visible on the active session screen alongside the rest timer.
+- It is displayed in the same fixed timer panel as the rest timer (see 5.3.2 and 5.7.1), always visible regardless of scroll position.
 
 #### 5.8.2 Timer Expiry
 - When the inactivity timer reaches zero:
-  - If `inactivityTimerSound` is enabled, an audible alert is played.
+  - If `inactivityTimerSound` is enabled, an audible alert is played using the **media audio stream** (`AudioManager.STREAM_MUSIC`), consistent with the rest timer alert.
   - If `inactivityTimerVibrate` is enabled, the device vibrates.
 - The timer does not loop after expiry.
 
@@ -370,6 +400,11 @@ The user can access a Settings screen from the main navigation.
 - Toggle or selector: "Dark Mode" / "Light Mode" / "System Default"
 - Applies the selected theme across the entire application.
 
+#### 5.9.7 Weight Unit
+- Selector: "kg" / "lb" (default: kg)
+- All weight values throughout the application (entry fields, session cards, history, CSV export) are displayed in the selected unit.
+- Weights are stored internally in kilograms; conversion is applied at the UI layer.
+
 ---
 
 ## 6. Screen Inventory
@@ -383,7 +418,7 @@ The user can access a Settings screen from the main navigation.
 | Workout Day Detail | Assign, reorder, and remove exercises for a workout day |
 | Active Session | Current workout session with exercise cards, timers, and set controls |
 | End Session Dialog | Notes input and confirm to end session |
-| Session History | List of completed sessions |
+| Session History | List and calendar views of completed sessions; toggle between views via tab/segmented button |
 | Session Detail | Full detail view of a single past session |
 | Settings | Application settings |
 
@@ -404,7 +439,8 @@ Home / Dashboard
 │   └── [Tap Day] → Workout Day Detail
 │       └── [Add Exercise] → Exercise picker
 ├── History → Session History
-│   └── [Tap Session] → Session Detail
+│   ├── [List view] → [Tap Session] → Session Detail
+│   └── [Calendar view] → [Tap Date] → Day summary → [Tap Session] → Session Detail
 └── Settings → Settings Screen
 ```
 
@@ -438,6 +474,14 @@ Home / Dashboard
 ### 8.6 Accessibility
 - All interactive elements must have content descriptions for screen reader support.
 - Adequate color contrast in both light and dark themes.
+
+### 8.7 App Icon
+- The application launcher icon shall be a dumbbell icon.
+
+### 8.8 Data Retention Across App Updates
+- All user data — exercises, workout days, exercise sessions, history, and settings — must be preserved when the application is updated to a new version.
+- When a new version of the app introduces database schema changes, a Room migration must be written for every version increment. Destructive migration (dropping and recreating the database) is not permitted in production releases.
+- Migration logic must include default values for any newly added columns so that existing rows remain valid after the upgrade.
 
 ---
 

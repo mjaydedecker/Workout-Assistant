@@ -22,6 +22,10 @@ I want to use this Android application to track my strength training exercises. 
 - Rest and inactivity timers will reset when a exercise set is marked as have been performed.
 - Provide a setting to be able to keep the screen on during a workout.  If the setting is on, once a workout has starting and until it has ended, the screen will not automatically turn off.
 - Provide a setting for a dark and light mode for the application.
+- Be able have a setting for the app to choose kgs or lbs for weights used.
+- Be able to edit the name of the workout day
+- Be able to pause and resume a exercise session incorporating the pause into the exercise session total duration.
+- Use a dumbbell icon for the app.
 
 ## Implementation Phases
 There will only be one implementation phase for this project.

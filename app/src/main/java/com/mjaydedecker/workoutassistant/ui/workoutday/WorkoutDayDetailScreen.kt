@@ -10,11 +10,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -66,6 +72,8 @@ fun WorkoutDayDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     var exercises by remember(uiState.exercises) { mutableStateOf(uiState.exercises) }
     var pendingRemove by remember { mutableStateOf<WorkoutDayExerciseItem?>(null) }
+    var isEditingTitle by remember { mutableStateOf(false) }
+    var titleInput by remember(uiState.workoutDay?.name) { mutableStateOf(uiState.workoutDay?.name ?: "") }
 
     val lazyListState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
@@ -85,10 +93,44 @@ fun WorkoutDayDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(uiState.workoutDay?.name ?: "") },
+                title = {
+                    if (isEditingTitle) {
+                        OutlinedTextField(
+                            value = titleInput,
+                            onValueChange = { titleInput = it },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                if (titleInput.isNotBlank()) viewModel.renameDay(titleInput)
+                                isEditingTitle = false
+                            })
+                        )
+                    } else {
+                        Text(uiState.workoutDay?.name ?: "")
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = {
+                        if (isEditingTitle) isEditingTitle = false else onNavigateBack()
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (isEditingTitle) {
+                        IconButton(
+                            onClick = {
+                                if (titleInput.isNotBlank()) viewModel.renameDay(titleInput)
+                                isEditingTitle = false
+                            },
+                            enabled = titleInput.isNotBlank()
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = "Save name")
+                        }
+                    } else {
+                        IconButton(onClick = { isEditingTitle = true }) {
+                            Icon(Icons.Default.Edit, contentDescription = "Rename workout day")
+                        }
                     }
                 }
             )

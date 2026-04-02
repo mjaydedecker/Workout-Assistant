@@ -20,6 +20,9 @@ class WorkoutDayListViewModel(private val repository: WorkoutDayRepository) : Vi
     private val _pendingDelete = MutableStateFlow<WorkoutDay?>(null)
     val pendingDelete: StateFlow<WorkoutDay?> = _pendingDelete
 
+    private val _pendingRename = MutableStateFlow<WorkoutDay?>(null)
+    val pendingRename: StateFlow<WorkoutDay?> = _pendingRename
+
     private val _showCreateDialog = MutableStateFlow(false)
     val showCreateDialog: StateFlow<Boolean> = _showCreateDialog
 
@@ -51,6 +54,18 @@ class WorkoutDayListViewModel(private val repository: WorkoutDayRepository) : Vi
     }
 
     fun cancelDelete() = _pendingDelete.update { null }
+
+    fun requestRename(day: WorkoutDay) = _pendingRename.update { day }
+    fun cancelRename() = _pendingRename.update { null }
+
+    fun confirmRename(newName: String) {
+        viewModelScope.launch {
+            _pendingRename.value?.let { day ->
+                repository.save(day.copy(name = newName.trim()))
+            }
+            _pendingRename.update { null }
+        }
+    }
 }
 
 class WorkoutDayListViewModelFactory(private val repository: WorkoutDayRepository) : ViewModelProvider.Factory {

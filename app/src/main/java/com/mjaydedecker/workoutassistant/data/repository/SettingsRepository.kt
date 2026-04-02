@@ -4,6 +4,7 @@ import com.mjaydedecker.workoutassistant.data.db.dao.AppSettingsDao
 import com.mjaydedecker.workoutassistant.data.db.entity.AppSettingsEntity
 import com.mjaydedecker.workoutassistant.data.model.AppSettings
 import com.mjaydedecker.workoutassistant.data.model.ThemeMode
+import com.mjaydedecker.workoutassistant.data.model.WeightUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -24,7 +25,8 @@ class SettingsRepository(private val appSettingsDao: AppSettingsDao) {
         inactivityTimerSound = inactivityTimerSound,
         inactivityTimerVibrate = inactivityTimerVibrate,
         keepScreenOn = keepScreenOn,
-        themeMode = ThemeMode.valueOf(themeMode)
+        themeMode = ThemeMode.valueOf(themeMode),
+        weightUnit = WeightUnit.valueOf(weightUnit)
     )
 
     private fun AppSettings.toEntity() = AppSettingsEntity(
@@ -36,6 +38,7 @@ class SettingsRepository(private val appSettingsDao: AppSettingsDao) {
         inactivityTimerSound = inactivityTimerSound,
         inactivityTimerVibrate = inactivityTimerVibrate,
         keepScreenOn = keepScreenOn,
-        themeMode = themeMode.name
+        themeMode = themeMode.name,
+        weightUnit = weightUnit.name
     )
 }

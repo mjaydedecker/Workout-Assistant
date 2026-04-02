@@ -20,6 +20,7 @@ import com.mjaydedecker.workoutassistant.data.db.entity.SessionExerciseEntity
 import com.mjaydedecker.workoutassistant.data.db.entity.WorkoutDayEntity
 import com.mjaydedecker.workoutassistant.data.db.entity.WorkoutDayExerciseEntity
 import com.mjaydedecker.workoutassistant.data.db.entity.WorkoutSessionEntity
+import com.mjaydedecker.workoutassistant.data.db.migrations.ALL_MIGRATIONS
 
 @Database(
     entities = [
@@ -31,7 +32,7 @@ import com.mjaydedecker.workoutassistant.data.db.entity.WorkoutSessionEntity
         ExerciseDefaultWeightEntity::class,
         AppSettingsEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(InstantConverter::class)
@@ -56,7 +57,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "workout_assistant.db"
                 )
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(*ALL_MIGRATIONS)
                     .build()
                     .also { INSTANCE = it }
             }
