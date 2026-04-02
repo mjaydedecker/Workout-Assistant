@@ -1,5 +1,6 @@
 package com.mjaydedecker.workoutassistant.ui.workoutday
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -27,12 +29,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -43,7 +49,7 @@ import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun WorkoutDayDetailScreen(
     app: WorkoutAssistantApp,
@@ -61,14 +67,17 @@ fun WorkoutDayDetailScreen(
     var exercises by remember(uiState.exercises) { mutableStateOf(uiState.exercises) }
     var pendingRemove by remember { mutableStateOf<WorkoutDayExerciseItem?>(null) }
 
-    val reorderState = rememberReorderableLazyListState(
-        onMove = { from, to ->
-            exercises = exercises.toMutableList().apply { add(to.index, removeAt(from.index)) }
-        },
-        onDragEnd = { _, _ ->
-            viewModel.onReorder(exercises.map { it.assignmentId })
-        }
-    )
+    val lazyListState = rememberLazyListState()
+    val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        exercises = exercises.toMutableList().apply { add(to.index, removeAt(from.index)) }
+    }
+
+    LaunchedEffect(reorderState) {
+        snapshotFlow { reorderState.isAnyItemDragging }
+            .drop(1)
+            .filter { !it }
+            .collect { viewModel.onReorder(exercises.map { it.assignmentId }) }
+    }
 
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
@@ -92,7 +101,7 @@ fun WorkoutDayDetailScreen(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(
-                state = reorderState.lazyListState,
+                state = lazyListState,
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(exercises, key = { it.assignmentId }) { item ->
