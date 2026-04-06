@@ -52,7 +52,8 @@ import com.mjaydedecker.workoutassistant.util.WeightFormatter
 fun ActiveSessionScreen(
     app: WorkoutAssistantApp,
     workoutDayId: Long?,
-    onSessionEnded: () -> Unit
+    onSessionEnded: () -> Unit,
+    onExerciseInfoSelected: (exerciseId: Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val viewModel: ActiveSessionViewModel = viewModel(
@@ -144,7 +145,8 @@ fun ActiveSessionScreen(
                             onMarkComplete = { viewModel.markSetComplete(exercise.id) },
                             onDecrement = { viewModel.decrementSet(exercise.id) },
                             onWeightChanged = { weight -> viewModel.updateWeight(exercise.id, weight) },
-                            onRemove = { viewModel.requestRemoveExercise(exercise.id) }
+                            onRemove = { viewModel.requestRemoveExercise(exercise.id) },
+                            onInfoClicked = { onExerciseInfoSelected(exercise.exerciseId) }
                         )
                     }
                 }

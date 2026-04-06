@@ -25,15 +25,20 @@ class HomeViewModel(
     workoutDayRepository: WorkoutDayRepository
 ) : ViewModel() {
 
+    private val totalExerciseCountFlow = combine(
+        exerciseRepository.getAllCustom(),
+        exerciseRepository.getAllLibrary()
+    ) { custom, library -> custom.size + library.size }
+
     val uiState: StateFlow<HomeUiState> = combine(
         sessionRepository.getActiveSessionFlow(),
-        exerciseRepository.getAll(),
+        totalExerciseCountFlow,
         workoutDayRepository.getAll(),
         sessionRepository.getAllCompleted()
-    ) { activeSession, exercises, days, completedSessions ->
+    ) { activeSession, exerciseCount, days, completedSessions ->
         HomeUiState(
             activeSession = activeSession,
-            exerciseCount = exercises.size,
+            exerciseCount = exerciseCount,
             workoutDayCount = days.size,
             completedSessionCount = completedSessions.size
         )

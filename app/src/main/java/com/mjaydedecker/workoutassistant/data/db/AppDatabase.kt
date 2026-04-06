@@ -32,7 +32,7 @@ import com.mjaydedecker.workoutassistant.data.db.migrations.ALL_MIGRATIONS
         ExerciseDefaultWeightEntity::class,
         AppSettingsEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(InstantConverter::class)

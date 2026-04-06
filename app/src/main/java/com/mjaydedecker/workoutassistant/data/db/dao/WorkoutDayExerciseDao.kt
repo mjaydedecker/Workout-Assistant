@@ -40,4 +40,7 @@ interface WorkoutDayExerciseDao {
 
     @Query("SELECT * FROM workout_day_exercises WHERE workoutDayId = :workoutDayId AND exerciseId = :exerciseId LIMIT 1")
     suspend fun getAssignment(workoutDayId: Long, exerciseId: Long): WorkoutDayExerciseEntity?
+
+    @Query("UPDATE workout_day_exercises SET sets = :sets WHERE id = :id")
+    suspend fun updateSets(id: Long, sets: Int)
 }

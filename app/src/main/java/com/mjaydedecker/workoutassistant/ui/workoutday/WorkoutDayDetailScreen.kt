@@ -3,9 +3,13 @@ package com.mjaydedecker.workoutassistant.ui.workoutday
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,16 +23,16 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,14 +47,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.filter
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mjaydedecker.workoutassistant.WorkoutAssistantApp
 import com.mjaydedecker.workoutassistant.data.model.WorkoutDayExerciseItem
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -60,7 +66,8 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 fun WorkoutDayDetailScreen(
     app: WorkoutAssistantApp,
     workoutDayId: Long,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToLibrary: ((workoutDayId: Long) -> Unit)? = null
 ) {
     val viewModel: WorkoutDayDetailViewModel = viewModel(
         factory = WorkoutDayDetailViewModelFactory(
@@ -73,7 +80,23 @@ fun WorkoutDayDetailScreen(
     var exercises by remember(uiState.exercises) { mutableStateOf(uiState.exercises) }
     var pendingRemove by remember { mutableStateOf<WorkoutDayExerciseItem?>(null) }
     var isEditingTitle by remember { mutableStateOf(false) }
-    var titleInput by remember(uiState.workoutDay?.name) { mutableStateOf(uiState.workoutDay?.name ?: "") }
+    var titleInput by remember { mutableStateOf("") }
+
+    LaunchedEffect(isEditingTitle) {
+        if (isEditingTitle) {
+            titleInput = uiState.workoutDay?.name ?: ""
+        }
+    }
+
+    // Edit-sets dialog state
+    var editSetsItem by remember { mutableStateOf<WorkoutDayExerciseItem?>(null) }
+    var editSetsInput by remember { mutableStateOf("") }
+    var editSetsError by remember { mutableStateOf<String?>(null) }
+
+    // Add custom exercise with sets
+    var addCustomExerciseId by remember { mutableStateOf<Long?>(null) }
+    var addSetsInput by remember { mutableStateOf("3") }
+    var addSetsError by remember { mutableStateOf<String?>(null) }
 
     val lazyListState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
@@ -136,7 +159,13 @@ fun WorkoutDayDetailScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { viewModel.showAddExercise() }) {
+            FloatingActionButton(onClick = {
+                if (onNavigateToLibrary != null) {
+                    onNavigateToLibrary(workoutDayId)
+                } else {
+                    viewModel.showAddExercise()
+                }
+            }) {
                 Icon(Icons.Default.Add, contentDescription = "Add exercise to day")
             }
         }
@@ -150,7 +179,7 @@ fun WorkoutDayDetailScreen(
                     ReorderableItem(reorderState, key = item.assignmentId) { _ ->
                         ListItem(
                             headlineContent = { Text(item.exercise.name) },
-                            supportingContent = { Text("${item.exercise.defaultSets} sets") },
+                            supportingContent = { Text("${item.sets} sets") },
                             leadingContent = {
                                 IconButton(
                                     modifier = Modifier.draggableHandle(),
@@ -160,8 +189,17 @@ fun WorkoutDayDetailScreen(
                                 }
                             },
                             trailingContent = {
-                                IconButton(onClick = { pendingRemove = item }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Remove ${item.exercise.name}")
+                                Row {
+                                    IconButton(onClick = {
+                                        editSetsItem = item
+                                        editSetsInput = item.sets.toString()
+                                        editSetsError = null
+                                    }) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Edit sets for ${item.exercise.name}")
+                                    }
+                                    IconButton(onClick = { pendingRemove = item }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Remove ${item.exercise.name}")
+                                    }
                                 }
                             }
                         )
@@ -179,6 +217,7 @@ fun WorkoutDayDetailScreen(
             }
         }
 
+        // Remove exercise confirmation dialog
         pendingRemove?.let { item ->
             AlertDialog(
                 onDismissRequest = { pendingRemove = null },
@@ -196,16 +235,95 @@ fun WorkoutDayDetailScreen(
             )
         }
 
+        // Edit sets dialog
+        editSetsItem?.let { item ->
+            AlertDialog(
+                onDismissRequest = { editSetsItem = null; editSetsError = null },
+                title = { Text("Edit Sets") },
+                text = {
+                    Column {
+                        Text("Sets for \"${item.exercise.name}\":")
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = editSetsInput,
+                            onValueChange = { editSetsInput = it; editSetsError = null },
+                            label = { Text("Sets") },
+                            isError = editSetsError != null,
+                            supportingText = editSetsError?.let { { Text(it) } },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val sets = editSetsInput.toIntOrNull()
+                        if (sets == null || sets < 1) {
+                            editSetsError = "Must be at least 1"
+                        } else {
+                            viewModel.updateSets(item.assignmentId, sets)
+                            editSetsItem = null
+                        }
+                    }) { Text("Save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { editSetsItem = null; editSetsError = null }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Custom exercise add-sets dialog (when adding a custom exercise from the sheet)
+        addCustomExerciseId?.let { exerciseId ->
+            AlertDialog(
+                onDismissRequest = { addCustomExerciseId = null; addSetsError = null },
+                title = { Text("Number of Sets") },
+                text = {
+                    Column {
+                        Text("How many sets for this exercise?")
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = addSetsInput,
+                            onValueChange = { addSetsInput = it; addSetsError = null },
+                            label = { Text("Sets") },
+                            isError = addSetsError != null,
+                            supportingText = addSetsError?.let { { Text(it) } },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val sets = addSetsInput.toIntOrNull()
+                        if (sets == null || sets < 1) {
+                            addSetsError = "Must be at least 1"
+                        } else {
+                            viewModel.addExercise(exerciseId, sets)
+                            addCustomExerciseId = null
+                        }
+                    }) { Text("Add") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { addCustomExerciseId = null; addSetsError = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // Custom exercise bottom sheet (for adding custom exercises directly)
         if (uiState.showAddExerciseSheet) {
             ModalBottomSheet(
                 onDismissRequest = { viewModel.hideAddExercise() },
                 sheetState = sheetState
             ) {
                 val assignedIds = uiState.exercises.map { it.exercise.id }.toSet()
-                val available = uiState.allExercises.filter { it.id !in assignedIds }
+                val available = uiState.allCustomExercises.filter { it.id !in assignedIds }
                 if (available.isEmpty()) {
                     Text(
-                        "All exercises are already in this workout day.",
+                        "No custom exercises available. Browse the Exercise Library to add exercises.",
                         modifier = Modifier.padding(PaddingValues(16.dp))
                     )
                 } else {
@@ -213,13 +331,16 @@ fun WorkoutDayDetailScreen(
                         items(available, key = { it.id }) { exercise ->
                             ListItem(
                                 headlineContent = { Text(exercise.name) },
-                                supportingContent = { Text("${exercise.defaultSets} sets") },
                                 modifier = Modifier.clickable {
                                     scope.launch { sheetState.hide() }.invokeOnCompletion {
-                                        viewModel.addExercise(exercise.id)
+                                        viewModel.hideAddExercise()
+                                        addCustomExerciseId = exercise.id
+                                        addSetsInput = "3"
+                                        addSetsError = null
                                     }
                                 }
                             )
+                            HorizontalDivider()
                         }
                     }
                 }

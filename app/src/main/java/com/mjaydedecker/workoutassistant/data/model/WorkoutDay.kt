@@ -14,5 +14,6 @@ data class WorkoutDayWithExercises(
 data class WorkoutDayExerciseItem(
     val assignmentId: Long,
     val exercise: Exercise,
-    val orderIndex: Int
+    val orderIndex: Int,
+    val sets: Int = 3
 )

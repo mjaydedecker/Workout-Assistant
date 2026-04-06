@@ -1,5 +1,6 @@
 package com.mjaydedecker.workoutassistant.ui.history
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -38,7 +39,8 @@ import java.time.format.DateTimeFormatter
 fun SessionDetailScreen(
     app: WorkoutAssistantApp,
     sessionId: Long,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onExerciseSelected: (exerciseId: Long) -> Unit = {}
 ) {
     val viewModel: SessionDetailViewModel = viewModel(
         factory = SessionDetailViewModelFactory(app.sessionRepository, app.settingsRepository, sessionId)
@@ -85,7 +87,10 @@ fun SessionDetailScreen(
 
                 uiState.exercises.forEach { exercise ->
                     Card(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable { onExerciseSelected(exercise.exerciseId) },
                         elevation = CardDefaults.cardElevation(1.dp)
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {

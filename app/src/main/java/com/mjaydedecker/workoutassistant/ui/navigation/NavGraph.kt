@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ViewDay
 import androidx.compose.material3.Icon
@@ -26,9 +27,12 @@ import androidx.navigation.navArgument
 import com.mjaydedecker.workoutassistant.WorkoutAssistantApp
 import com.mjaydedecker.workoutassistant.ui.exercise.ExerciseFormScreen
 import com.mjaydedecker.workoutassistant.ui.exercise.ExerciseListScreen
+import com.mjaydedecker.workoutassistant.ui.history.ExerciseWeightHistoryScreen
 import com.mjaydedecker.workoutassistant.ui.history.SessionDetailScreen
 import com.mjaydedecker.workoutassistant.ui.history.SessionHistoryScreen
 import com.mjaydedecker.workoutassistant.ui.home.HomeScreen
+import com.mjaydedecker.workoutassistant.ui.library.ExerciseDetailScreen
+import com.mjaydedecker.workoutassistant.ui.library.ExerciseLibraryScreen
 import com.mjaydedecker.workoutassistant.ui.session.ActiveSessionScreen
 import com.mjaydedecker.workoutassistant.ui.settings.SettingsScreen
 import com.mjaydedecker.workoutassistant.ui.workoutday.WorkoutDayDetailScreen
@@ -44,7 +48,7 @@ fun NavGraph(app: WorkoutAssistantApp) {
 
     val bottomNavItems = listOf(
         Triple(Screen.Home, Icons.Default.Home, "Home"),
-        Triple(Screen.ExerciseList, Icons.Default.FitnessCenter, "Exercises"),
+        Triple(Screen.ExerciseLibrary, Icons.AutoMirrored.Filled.LibraryBooks, "Library"),
         Triple(Screen.WorkoutDayList, Icons.Default.ViewDay, "Days"),
         Triple(Screen.SessionHistory, Icons.Default.History, "History"),
         Triple(Screen.Settings, Icons.Default.Settings, "Settings")
@@ -55,13 +59,23 @@ fun NavGraph(app: WorkoutAssistantApp) {
             if (!hideBottomBar) {
                 NavigationBar {
                     bottomNavItems.forEach { (screen, icon, label) ->
-                        val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                        val selected = currentDestination?.hierarchy?.any {
+                            it.route == screen.route ||
+                            // Treat ExerciseDetail and ExerciseLibrary as part of the same tab
+                            (screen == Screen.ExerciseLibrary &&
+                                (it.route?.startsWith("exercise_library") == true ||
+                                 it.route?.startsWith("exercise_detail") == true))
+                        } == true
                         NavigationBarItem(
                             icon = { Icon(icon, contentDescription = label) },
                             label = { Text(label) },
                             selected = selected,
                             onClick = {
-                                navController.navigate(screen.route) {
+                                val route = if (screen == Screen.ExerciseLibrary)
+                                    Screen.ExerciseLibrary.createRoute()
+                                else
+                                    screen.route
+                                navController.navigate(route) {
                                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
@@ -83,6 +97,44 @@ fun NavGraph(app: WorkoutAssistantApp) {
                     app = app,
                     onStartWorkout = { navController.navigate(Screen.WorkoutDayList.route) },
                     onResumeWorkout = { navController.navigate(Screen.ActiveSession.createRoute()) }
+                )
+            }
+
+            composable(
+                route = Screen.ExerciseLibrary.route,
+                arguments = listOf(navArgument("workoutDayId") {
+                    type = NavType.LongType; defaultValue = -1L
+                })
+            ) { backStackEntry ->
+                val workoutDayId = backStackEntry.arguments?.getLong("workoutDayId") ?: -1L
+                ExerciseLibraryScreen(
+                    app = app,
+                    onExerciseSelected = { exerciseId ->
+                        navController.navigate(
+                            Screen.ExerciseDetail.createRoute(exerciseId, workoutDayId)
+                        )
+                    },
+                    onNavigateBack = if (workoutDayId != -1L) {
+                        { navController.popBackStack() }
+                    } else null,
+                    onManageCustomExercises = { navController.navigate(Screen.ExerciseList.route) }
+                )
+            }
+
+            composable(
+                route = Screen.ExerciseDetail.route,
+                arguments = listOf(
+                    navArgument("exerciseId") { type = NavType.LongType },
+                    navArgument("workoutDayId") { type = NavType.LongType; defaultValue = -1L }
+                )
+            ) { backStackEntry ->
+                val exerciseId = backStackEntry.arguments!!.getLong("exerciseId")
+                val workoutDayId = backStackEntry.arguments?.getLong("workoutDayId") ?: -1L
+                ExerciseDetailScreen(
+                    app = app,
+                    exerciseId = exerciseId,
+                    preselectedWorkoutDayId = workoutDayId.takeIf { it != -1L },
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
 
@@ -124,7 +176,10 @@ fun NavGraph(app: WorkoutAssistantApp) {
                 WorkoutDayDetailScreen(
                     app = app,
                     workoutDayId = workoutDayId,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToLibrary = { dayId ->
+                        navController.navigate(Screen.ExerciseLibrary.createRoute(dayId))
+                    }
                 )
             }
 
@@ -142,6 +197,9 @@ fun NavGraph(app: WorkoutAssistantApp) {
                         navController.navigate(Screen.SessionHistory.route) {
                             popUpTo(Screen.Home.route)
                         }
+                    },
+                    onExerciseInfoSelected = { exerciseId ->
+                        navController.navigate(Screen.ExerciseDetail.createRoute(exerciseId, -1L))
                     }
                 )
             }
@@ -161,12 +219,27 @@ fun NavGraph(app: WorkoutAssistantApp) {
                 SessionDetailScreen(
                     app = app,
                     sessionId = sessionId,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = { navController.popBackStack() },
+                    onExerciseSelected = { exerciseId ->
+                        navController.navigate(Screen.ExerciseWeightHistory.createRoute(exerciseId))
+                    }
                 )
             }
 
             composable(Screen.Settings.route) {
                 SettingsScreen(app = app)
+            }
+
+            composable(
+                route = Screen.ExerciseWeightHistory.route,
+                arguments = listOf(navArgument("exerciseId") { type = NavType.LongType })
+            ) { backStackEntry ->
+                val exerciseId = backStackEntry.arguments!!.getLong("exerciseId")
+                ExerciseWeightHistoryScreen(
+                    app = app,
+                    exerciseId = exerciseId,
+                    onNavigateBack = { navController.popBackStack() }
+                )
             }
         }
     }

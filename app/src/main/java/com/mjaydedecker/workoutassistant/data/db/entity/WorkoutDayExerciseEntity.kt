@@ -27,5 +27,6 @@ data class WorkoutDayExerciseEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val workoutDayId: Long,
     val exerciseId: Long,
-    val orderIndex: Int
+    val orderIndex: Int,
+    val sets: Int = 3
 )

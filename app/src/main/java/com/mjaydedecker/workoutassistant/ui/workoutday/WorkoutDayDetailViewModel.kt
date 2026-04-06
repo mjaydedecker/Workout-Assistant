@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 data class WorkoutDayDetailUiState(
     val workoutDay: WorkoutDay? = null,
     val exercises: List<WorkoutDayExerciseItem> = emptyList(),
-    val allExercises: List<Exercise> = emptyList(),
+    val allCustomExercises: List<Exercise> = emptyList(),
     val showAddExerciseSheet: Boolean = false
 )
 
@@ -31,15 +31,21 @@ class WorkoutDayDetailViewModel(
 
     private val _showAddSheet = MutableStateFlow(false)
 
+    // Combine all exercises (library + custom) so the workout day detail can display names for both
+    private val allExercisesFlow = combine(
+        exerciseRepository.getAllCustom(),
+        exerciseRepository.getAllLibrary()
+    ) { custom, library -> custom + library }
+
     val uiState: StateFlow<WorkoutDayDetailUiState> = combine(
-        workoutDayRepository.getWithExercises(workoutDayId, exerciseRepository.getAll()),
-        exerciseRepository.getAll(),
+        workoutDayRepository.getWithExercises(workoutDayId, allExercisesFlow),
+        exerciseRepository.getAllCustom(),
         _showAddSheet
-    ) { dayWithExercises, allExercises, showAddSheet ->
+    ) { dayWithExercises, customExercises, showAddSheet ->
         WorkoutDayDetailUiState(
             workoutDay = dayWithExercises?.workoutDay,
             exercises = dayWithExercises?.exercises ?: emptyList(),
-            allExercises = allExercises,
+            allCustomExercises = customExercises,
             showAddExerciseSheet = showAddSheet
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WorkoutDayDetailUiState())
@@ -47,10 +53,16 @@ class WorkoutDayDetailViewModel(
     fun showAddExercise() = _showAddSheet.update { true }
     fun hideAddExercise() = _showAddSheet.update { false }
 
-    fun addExercise(exerciseId: Long) {
+    fun addExercise(exerciseId: Long, sets: Int) {
         viewModelScope.launch {
-            workoutDayRepository.addExerciseToDay(workoutDayId, exerciseId)
+            workoutDayRepository.addExerciseToDay(workoutDayId, exerciseId, sets)
             _showAddSheet.update { false }
+        }
+    }
+
+    fun updateSets(assignmentId: Long, sets: Int) {
+        viewModelScope.launch {
+            workoutDayRepository.updateExerciseSets(assignmentId, sets)
         }
     }
 

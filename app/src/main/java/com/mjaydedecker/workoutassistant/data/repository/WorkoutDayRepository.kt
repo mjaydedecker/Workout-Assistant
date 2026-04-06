@@ -43,26 +43,30 @@ class WorkoutDayRepository(
             val day = workoutDayDao.getById(workoutDayId)?.toDomain() ?: return@combine null
             val items = assignments.mapNotNull { assignment ->
                 exerciseMap[assignment.exerciseId]?.let { exercise ->
-                    WorkoutDayExerciseItem(assignment.id, exercise, assignment.orderIndex)
+                    WorkoutDayExerciseItem(assignment.id, exercise, assignment.orderIndex, assignment.sets)
                 }
             }
             WorkoutDayWithExercises(day, items)
         }
     }
 
-    suspend fun addExerciseToDay(workoutDayId: Long, exerciseId: Long) {
+    suspend fun addExerciseToDay(workoutDayId: Long, exerciseId: Long, sets: Int = 3) {
         val maxIndex = workoutDayExerciseDao.getMaxOrderIndex(workoutDayId) ?: -1
         workoutDayExerciseDao.insert(
             WorkoutDayExerciseEntity(
                 workoutDayId = workoutDayId,
                 exerciseId = exerciseId,
-                orderIndex = maxIndex + 1
+                orderIndex = maxIndex + 1,
+                sets = sets
             )
         )
     }
 
     suspend fun removeExerciseFromDay(assignmentId: Long) =
         workoutDayExerciseDao.deleteById(assignmentId)
+
+    suspend fun updateExerciseSets(assignmentId: Long, sets: Int) =
+        workoutDayExerciseDao.updateSets(assignmentId, sets)
 
     suspend fun reorderExercises(orderedAssignmentIds: List<Long>) {
         workoutDayExerciseDao.reorder(

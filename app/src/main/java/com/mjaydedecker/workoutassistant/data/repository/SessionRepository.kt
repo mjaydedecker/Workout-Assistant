@@ -8,6 +8,7 @@ import com.mjaydedecker.workoutassistant.data.db.dao.WorkoutSessionDao
 import com.mjaydedecker.workoutassistant.data.db.entity.ExerciseDefaultWeightEntity
 import com.mjaydedecker.workoutassistant.data.db.entity.SessionExerciseEntity
 import com.mjaydedecker.workoutassistant.data.db.entity.WorkoutSessionEntity
+import com.mjaydedecker.workoutassistant.data.model.ExerciseWeightPoint
 import com.mjaydedecker.workoutassistant.data.model.SessionExercise
 import com.mjaydedecker.workoutassistant.data.model.WorkoutSession
 import kotlinx.coroutines.flow.Flow
@@ -56,7 +57,7 @@ class SessionRepository(
                     sessionId = sessionId,
                     exerciseId = exercise.id,
                     exerciseName = exercise.name,
-                    targetSets = exercise.defaultSets,
+                    targetSets = assignment.sets,
                     weightKg = defaultWeight,
                     orderIndex = index
                 )
@@ -74,6 +75,9 @@ class SessionRepository(
 
     suspend fun getSessionExerciseById(id: Long): SessionExercise? =
         sessionExerciseDao.getById(id)?.toDomain()
+
+    fun getWeightHistory(exerciseId: Long): Flow<List<ExerciseWeightPoint>> =
+        sessionExerciseDao.getWeightHistory(exerciseId)
 
     suspend fun saveDefaultWeight(exerciseId: Long, weightKg: Double) {
         exerciseDefaultWeightDao.upsert(ExerciseDefaultWeightEntity(exerciseId, weightKg))

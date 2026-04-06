@@ -42,7 +42,7 @@ fun ExerciseListScreen(
     val pendingDelete by viewModel.pendingDelete.collectAsState()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Exercises") }) },
+        topBar = { TopAppBar(title = { Text("My Exercises") }) },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddExercise) {
                 Icon(Icons.Default.Add, contentDescription = "Add exercise")
@@ -52,7 +52,7 @@ fun ExerciseListScreen(
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (exercises.isEmpty()) {
                 Text(
-                    "No exercises yet. Tap + to add one.",
+                    "No custom exercises yet. Tap + to add one.",
                     modifier = Modifier.align(Alignment.Center),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -62,7 +62,6 @@ fun ExerciseListScreen(
                     items(exercises, key = { it.id }) { exercise ->
                         ListItem(
                             headlineContent = { Text(exercise.name) },
-                            supportingContent = { Text("${exercise.defaultSets} sets") },
                             trailingContent = {
                                 IconButton(onClick = { viewModel.requestDelete(exercise) }) {
                                     Icon(

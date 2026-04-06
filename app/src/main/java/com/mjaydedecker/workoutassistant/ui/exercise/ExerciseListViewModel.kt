@@ -19,7 +19,7 @@ data class ExerciseListUiState(
 
 class ExerciseListViewModel(private val repository: ExerciseRepository) : ViewModel() {
 
-    val exercises: StateFlow<List<Exercise>> = repository.getAll()
+    val exercises: StateFlow<List<Exercise>> = repository.getAllCustom()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _pendingDelete = MutableStateFlow<Exercise?>(null)

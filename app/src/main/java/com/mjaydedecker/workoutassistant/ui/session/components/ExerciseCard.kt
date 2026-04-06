@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -48,6 +49,7 @@ fun ExerciseCard(
     onDecrement: () -> Unit,
     onWeightChanged: (Double) -> Unit,
     onRemove: () -> Unit,
+    onInfoClicked: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var weightText by remember(exercise.id, exercise.weightKg, weightUnit) {
@@ -77,6 +79,11 @@ fun ExerciseCard(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f)
                 )
+                if (onInfoClicked != null) {
+                    IconButton(onClick = onInfoClicked) {
+                        Icon(Icons.Default.Info, contentDescription = "View info for ${exercise.exerciseName}")
+                    }
+                }
                 if (exercise.isCompleted) {
                     Icon(
                         Icons.Default.CheckCircle,

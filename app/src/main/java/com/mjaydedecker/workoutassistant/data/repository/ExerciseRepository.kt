@@ -11,8 +11,11 @@ class ExerciseRepository(
     private val exerciseDao: ExerciseDao,
     private val workoutDayExerciseDao: WorkoutDayExerciseDao
 ) {
-    fun getAll(): Flow<List<Exercise>> =
-        exerciseDao.getAll().map { list -> list.map { it.toDomain() } }
+    fun getAllCustom(): Flow<List<Exercise>> =
+        exerciseDao.getAllCustom().map { list -> list.map { it.toDomain() } }
+
+    fun getAllLibrary(): Flow<List<Exercise>> =
+        exerciseDao.getAllLibrary().map { list -> list.map { it.toDomain() } }
 
     suspend fun getById(id: Long): Exercise? =
         exerciseDao.getById(id)?.toDomain()
@@ -29,6 +32,29 @@ class ExerciseRepository(
     suspend fun delete(exercise: Exercise) =
         exerciseDao.delete(exercise.toEntity())
 
-    private fun ExerciseEntity.toDomain() = Exercise(id, name, defaultSets)
-    private fun Exercise.toEntity() = ExerciseEntity(id, name, defaultSets)
+    private fun ExerciseEntity.toDomain() = Exercise(
+        id = id,
+        name = name,
+        isCustom = isCustom,
+        force = force,
+        equipment = equipment,
+        primaryMuscles = primaryMuscles,
+        secondaryMuscles = secondaryMuscles,
+        description = description,
+        videoUrls = videoUrls,
+        imageRefs = imageRefs
+    )
+
+    private fun Exercise.toEntity() = ExerciseEntity(
+        id = id,
+        name = name,
+        isCustom = isCustom,
+        force = force,
+        equipment = equipment,
+        primaryMuscles = primaryMuscles,
+        secondaryMuscles = secondaryMuscles,
+        description = description,
+        videoUrls = videoUrls,
+        imageRefs = imageRefs
+    )
 }

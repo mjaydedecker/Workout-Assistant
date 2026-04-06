@@ -14,9 +14,7 @@ import kotlinx.coroutines.launch
 
 data class ExerciseFormState(
     val name: String = "",
-    val defaultSets: String = "3",
     val nameError: String? = null,
-    val setsError: String? = null,
     val isSaving: Boolean = false
 )
 
@@ -35,27 +33,19 @@ class ExerciseFormViewModel(
         if (exerciseId != null) {
             viewModelScope.launch {
                 repository.getById(exerciseId)?.let { exercise ->
-                    _state.update { it.copy(name = exercise.name, defaultSets = exercise.defaultSets.toString()) }
+                    _state.update { it.copy(name = exercise.name) }
                 }
             }
         }
     }
 
     fun onNameChange(value: String) = _state.update { it.copy(name = value, nameError = null) }
-    fun onSetsChange(value: String) = _state.update { it.copy(defaultSets = value, setsError = null) }
 
     fun save() {
         val current = _state.value
-        val setsInt = current.defaultSets.toIntOrNull()
 
-        var nameError: String? = null
-        var setsError: String? = null
-
-        if (current.name.isBlank()) nameError = "Name is required"
-        if (setsInt == null || setsInt < 1) setsError = "Must be at least 1"
-
-        if (nameError != null || setsError != null) {
-            _state.update { it.copy(nameError = nameError, setsError = setsError) }
+        if (current.name.isBlank()) {
+            _state.update { it.copy(nameError = "Name is required") }
             return
         }
 
@@ -65,7 +55,7 @@ class ExerciseFormViewModel(
                 return@launch
             }
             _state.update { it.copy(isSaving = true) }
-            repository.save(Exercise(id = exerciseId ?: 0L, name = current.name.trim(), defaultSets = setsInt!!))
+            repository.save(Exercise(id = exerciseId ?: 0L, name = current.name.trim(), isCustom = true))
             _navigateBack.emit(Unit)
         }
     }
